@@ -15,3 +15,9 @@ misp_key = '<misp key>'
 misp_domain = '<misp url>'
 misp_verifycert = False
 
+
+verbose_log = False
+write_post_json = False
+
+misp_ignore_localtags = True
+defaultConfidenceLevel = 50%

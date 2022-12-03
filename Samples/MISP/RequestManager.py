@@ -79,10 +79,13 @@ class RequestManager:
             config.graph_auth[TENANT],
             config.graph_auth[CLIENT_ID],
             config.graph_auth[CLIENT_SECRET])
-        print(json.dumps(requests.get(
+
+        res = requests.get(
             GRAPH_TI_INDICATORS_URL,
             headers={"Authorization": f"Bearer {access_token}"}
-            ).json(), indent=2))
+            ).json()
+        if config.verbose_log:
+            print(json.dumps(res, indent=2))
 
     @staticmethod
     def _get_request_hash(request):
@@ -92,9 +95,11 @@ class RequestManager:
         }.items())))
 
     def _log_post(self, response):
-        self._clear_screen()
+        # self._clear_screen()
         cur_batch_success_count = cur_batch_error_count = 0
-        #print(f"response: {response}")
+        if config.verbose_log:
+            print(f"response: {response}")
+
         if 'error' in response:
             self.error_count += 1
             cur_batch_error_count += 1
@@ -110,6 +115,8 @@ class RequestManager:
                         cur_batch_error_count += 1
                         file_name = f"{self._get_datetime_now()}_error_{value[INDICATOR_REQUEST_HASH]}.json"
                         log_file_name = file_name.replace(':', '')
+                        with open(f'{LOG_DIRECTORY_NAME}/{log_file_name}', 'w') as file:
+                            json.dump(value, file)
                     else:
                         self.success_count += 1
                         cur_batch_success_count += 1
@@ -117,23 +124,25 @@ class RequestManager:
                         # if not config.verbose_log:
                         #     continue
                         file_name = f"{self._get_datetime_now()}_{value[INDICATOR_REQUEST_HASH]}.json"
-                        log_file_name = file_name.replace(':', '')
-                    with open(f'{LOG_DIRECTORY_NAME}/{log_file_name}', 'w') as file:
-                        json.dump(value, file)
-            else: 
+                        log_file_name = file_name.replace(':', '')                    
+                        if config.write_post_json:
+                            with open(f'{LOG_DIRECTORY_NAME}/{log_file_name}', 'w') as file:
+                                json.dump(value, file)
+            else:
                 file_name = f"{self._get_datetime_now()}.json"
                 log_file_name = file_name.replace(':', '')
-                with open(f'{LOG_DIRECTORY_NAME}/{log_file_name}', 'w') as file:
-                    json.dump(response, file)
+                if config.write_post_json:
+                    with open(f'{LOG_DIRECTORY_NAME}/{log_file_name}', 'w') as file:
+                        json.dump(response, file)
 
         print('sending security indicators to Microsoft Graph Security\n')
         print(f'{self.total_indicators} indicators are parsed from misp events. Only those that do not exist in Microsoft Graph Security will be sent.\n')
         # print(f"current batch indicators sent:  {str(cur_batch_success_count + cur_batch_error_count).rjust(self.RJUST)}")
         # print(f"current batch response success: {str(cur_batch_success_count).rjust(self.RJUST)}")
         # print(f"current batch response error:   {str(cur_batch_error_count).rjust(self.RJUST)}\n")
-        #print(f"total indicators sent:          {str(self._get_total_indicators_sent()).rjust(self.RJUST)}")
-        #print(f"total response success:         {str(self.success_count).rjust(self.RJUST)}")
-        #print(f"total response error:           {str(self.error_count).rjust(self.RJUST)}\n")
+        # print(f"total indicators sent:          {str(self._get_total_indicators_sent()).rjust(self.RJUST)}")
+        # print(f"total response success:         {str(self.success_count).rjust(self.RJUST)}")
+        # print(f"total response error:           {str(self.error_count).rjust(self.RJUST)}\n")
         cur_batch_took = self._get_timestamp() - self.last_batch_done_timestamp
         self.last_batch_done_timestamp = self._get_timestamp()
         print(f'current batch took:   {round(cur_batch_took, 2):{6}} seconds')
@@ -147,11 +156,9 @@ class RequestManager:
         return str(datetime.datetime.now()).replace(' ', '_')
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        #if config.targetProduct in TARGET_PRODUCT_BULK_SUPPORT:
+        
         self._post_to_graph()
-        # else:
-        #     self._post_one_to_graph()
-
+        
         self._del_indicators_no_longer_exist()
 
         self.expiration_date_fd.seek(0)
@@ -169,15 +176,18 @@ class RequestManager:
         self.del_count = len(indicators)
         for i in range(0, len(indicators), 100):
             request_body = {'value': indicators[i: i+100]}
+            if config.verbose_log:
+                print(request_body)
             response = requests.post(GRAPH_BULK_DEL_URL, headers=self.headers, json=request_body).json()
             file_name = f"del_{self._get_datetime_now()}.json"
             log_file_name = file_name.replace(':', '')
-            json.dump(response, open(f'{LOG_DIRECTORY_NAME}/{log_file_name}', 'w'), indent=2)
+            if config.write_post_json:
+                json.dump(response, open(f'{LOG_DIRECTORY_NAME}/{log_file_name}', 'w'), indent=2)
         for hash_of_indicator_to_delete in self.hash_of_indicators_to_delete.keys():
             self.existing_indicators_hash.pop(hash_of_indicator_to_delete, None)
 
     def _print_summary(self):
-        self._clear_screen()
+        # self._clear_screen()
         print('script finished running\n')
         print(f"total indicators sent:    {str(self._get_total_indicators_sent()).rjust(self.RJUST)}")
         print(f"total response success:   {str(self.success_count).rjust(self.RJUST)}")

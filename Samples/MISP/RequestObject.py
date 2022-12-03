@@ -1,3 +1,5 @@
+from distutils.command.config import config
+import config
 from constants import *
 
 
@@ -15,10 +17,31 @@ class RequestObject:
             setattr(self, mapping, attr['value'])
         if attr['type'] in MISP_SPECIAL_CASE_TYPES:
             self._handle_special_cases(attr)
-        self.tags = [tag['name'].strip() for tag in attr.get("Tag", [])]
+        # self.tags = [tag['name'].strip() for tag in attr.get("Tag", [])]
+        # Tags on attribute level
+        self.tags = []
+        for tag in attr.get("Tag", []):
+            if config.misp_ignore_localtags:
+                if tag["local"] != 1:
+                    self.tags.append(tag['name'].strip())
         for tag in self.tags:
             if 'diamond-model:' in tag:
                 self.diamondModel = tag.split(':')[1]
+                self.tags.remove(tag)
+            if 'kill-chain:' in tag:
+                kill_chain = tag.split(':')[1]
+                # Fix some Azure quirks
+                if kill_chain == "Command and Control":
+                    kill_chain = "C2"
+                elif kill_chain == "Actions on Objectives":
+                    kill_chain = "Actions"
+                self.killChain = [ kill_chain ]
+                self.tags.remove(tag)                
+            if 'sentinel-threattype' in tag:    # Override with attribute value
+                self.threatType = tag.split(':')[1]
+                self.tags.remove(tag)
+
+        self.additionalInformation = attr['comment']
 
     def _handle_ip(self, attr, attr_type, graph_v4_name, graph_v6_name):
         if attr['type'] == attr_type:

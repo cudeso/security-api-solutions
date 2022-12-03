@@ -12,7 +12,9 @@ ATTR_MAPPING = {
     'size-in-bytes': 'fileSize',
     'url': 'url',
     'user-agent': 'userAgent',
-    'uuid': 'externalId'
+    'uuid': 'externalId',
+    'domain': 'domainName',
+    'hostname': 'domainName'
 }
 
 MISP_HASH_TYPES = frozenset([
